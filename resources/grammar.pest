@@ -1,0 +1,24 @@
+safeChar = _{ ASCII_ALPHANUMERIC | "_" }
+
+identifier = { !reservedKeyword ~ safeChar+ }
+
+CREATE = _{ ^"CREATE" }
+TABLE = _{ ^"TABLE" }
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+createTableStatement = {
+	CREATE ~ TABLE ~ identifier
+}
+
+reservedKeyword = _{
+    CREATE | TABLE
+}
+
+statementBody = _{
+    createTableStatement // TODO: Expand this with | to add other statement types.
+}
+
+eventQlStatement = _{
+    (statementBody ~ ";"?)+
+}
