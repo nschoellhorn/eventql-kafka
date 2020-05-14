@@ -1,6 +1,6 @@
 safeChar = _{ ASCII_ALPHANUMERIC | "_" }
 
-identifier = { !reservedKeyword ~ safeChar+ }
+identifier = @{ !reservedKeyword ~ !WHITESPACE ~ safeChar+ }
 
 CREATE = _{ ^"CREATE" }
 TABLE = _{ ^"TABLE" }
@@ -19,6 +19,10 @@ statementBody = _{
     createTableStatement // TODO: Expand this with | to add other statement types.
 }
 
+statementEnd = _{
+    ";" | EOI
+}
+
 eventQlStatement = _{
-    (statementBody ~ ";"?)+
+    (statementBody ~ statementEnd)+
 }
