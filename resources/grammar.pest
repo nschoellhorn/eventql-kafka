@@ -4,15 +4,34 @@ identifier = @{ !reservedKeyword ~ !WHITESPACE ~ safeChar+ }
 
 CREATE = _{ ^"CREATE" }
 TABLE = _{ ^"TABLE" }
+STRING = _{ ^"STRING" }
+INT = _{ ^"INT" }
+FROM = _{ ^"FROM" }
+VIA = _{ ^"VIA" }
 
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 
 createTableStatement = {
 	CREATE ~ TABLE ~ identifier
+	~ "(" ~ (columnDefinition ~ ",")* ~ columnDefinition ~ ")"
+	~ VIA ~ schemaIdentifier
+}
+
+columnDefinition = {
+    // first_name STRING FROM fname
+    identifier ~ columnType ~ FROM ~ schemaIdentifier
+}
+
+schemaIdentifier = {
+    identifier
+}
+
+columnType = {
+    STRING | INT
 }
 
 reservedKeyword = _{
-    CREATE | TABLE
+    CREATE | TABLE | STRING | INT | FROM | VIA
 }
 
 statementBody = _{
