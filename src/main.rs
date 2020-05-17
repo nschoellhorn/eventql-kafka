@@ -1,3 +1,10 @@
+mod parser;
+mod ast;
+
+extern crate pest;
+#[macro_use]
+extern crate pest_derive;
+
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -17,5 +24,14 @@ fn handle_connection(mut stream: TcpStream) {
 
     stream.read(&mut buffer).unwrap();
 
-    println!("Request: {}", String::from_utf8_lossy(&buffer[..]).trim());
+    let request = String::from_utf8_lossy(&buffer[..]).trim().to_string();
+
+    println!("Request: {}", request);
+
+    let lexed_query = parser::lex(&request);
+    let ast = parser::create_ast(lexed_query);
+    println!("Reponse: {:#?}", ast);
+
+    stream.write(format!("{:#?}", ast).as_bytes());
+    stream.flush();
 }

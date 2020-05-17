@@ -1,29 +1,17 @@
-extern crate pest;
-#[macro_use]
-extern crate pest_derive;
-
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
-
 use crate::ast::{EventQL, ColumnDefinition, DataType};
-
-mod ast;
 
 #[derive(Parser)]
 #[grammar = "../resources/grammar.pest"]
-struct EventQLParser;
+pub(crate) struct EventQLParser;
 
-fn main() {
-    let example_query = "CREATE TABLE someIdent (id INT FROM id, first_name STRING FROM fname, last_name STRING FROM lname) VIA sometopic; CREATE TABLE something (id INT FROM id, first_name STRING FROM fname, last_name STRING FROM lname) VIA othertopic;";
-    println!("Parsing Query: {}", example_query);
-    let parsed_query = EventQLParser::parse(Rule::eventQlStatement, example_query)
-        .unwrap_or_else(|e| panic!("{}", e));
-
-    let ast = create_ast(parsed_query);
-    println!("{:#?}", ast);
+pub(crate) fn lex(input: &str) -> Pairs<Rule> {
+    EventQLParser::parse(Rule::eventQlStatement, input)
+        .unwrap_or_else(|e| panic!("{}", e))
 }
 
-fn create_ast(parsed_query: Pairs<Rule>) -> std::vec::Vec<EventQL> {
+pub(crate) fn create_ast(parsed_query: Pairs<Rule>) -> std::vec::Vec<EventQL> {
     parsed_query.map(|token| parse_statement(token))
         .collect()
 }
@@ -74,6 +62,7 @@ fn build_column_definition(inner_tokens: Pairs<Rule>) -> ColumnDefinition {
     ColumnDefinition {
         identifier: identifier.expect("No column identifier specified."),
         data_type: data_type.expect("No data type specified."),
-        schema_property_identifier: property_identifier.expect("No property identifier specified.")
+        schema_property_identifier: property_identifier.expect("No property identifier specified."),
     }
 }
+
