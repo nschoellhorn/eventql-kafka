@@ -38,12 +38,14 @@ pub(crate) fn consume_via<F>(decoder: Arc<Mutex<Decoder>>, topic: &str, message_
     println!("Topic: {}", topic);
     let mut consumer: Consumer = Consumer::from_hosts(vec!("localhost:9092".to_owned()))
         .with_topic(String::from(topic))
+        .with_group("eventql_".to_owned() + topic)
         .with_fallback_offset(FetchOffset::Earliest)
         .with_offset_storage(GroupOffsetStorage::Kafka)
         .create()
         .unwrap();
 
     let mut latest_commit = Instant::now();
+    let mut consumed_messages = false;
 
     loop {
         let messages: MessageSets = consumer.poll().unwrap();
@@ -51,19 +53,33 @@ pub(crate) fn consume_via<F>(decoder: Arc<Mutex<Decoder>>, topic: &str, message_
             let messages = message_set.messages();
             consumer.consume_messageset(message_set);
 
+            consumed_messages = true;
+
             messages
         })
             .map(|message| decoder.lock().unwrap().decode(Some(message.value)))
             .map(|result| result.unwrap())
             .for_each(&message_handler);
 
-        // Commit current offset to Kafka every 5 seconds
-        let current_instant = Instant::now();
-        if current_instant.gt(&latest_commit.add(Duration::from_secs(5))) {
-            consumer.commit_consumed();
-            latest_commit = current_instant;
-        }
+        // Commit current offset to Kafka every 5 seconds if new messages were received since last commit
+        // This is better than committing after each consumed message in high-load situations
+        let (updated_commit, updated_messages) = commit_offset_if_needed(&mut consumer, &latest_commit, consumed_messages);
+        latest_commit = updated_commit;
+        consumed_messages = updated_messages;
 
+        // Make the thread chill out between the polls (until we have a better solution - long polling?)
         sleep(Duration::from_millis(500));
     }
+}
+
+fn commit_offset_if_needed(consumer: &mut Consumer, latest_commit: &Instant, consumed_messages: bool) -> (Instant, bool) {
+    let current_instant = Instant::now();
+    if current_instant.gt(&latest_commit.add(Duration::from_secs(5)))
+        && consumed_messages {
+        println!("Committing offset to Kafka...");
+        consumer.commit_consumed();
+        return (current_instant, false);
+    }
+
+    (latest_commit.to_owned(), consumed_messages)
 }
