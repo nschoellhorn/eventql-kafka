@@ -10,6 +10,8 @@ use avro_rs::types::Value;
 use schema_registry_converter::Decoder;
 
 use crate::kafka::KafkaWrapper;
+use std::thread;
+use std::sync::{Arc, Mutex};
 
 mod parser;
 mod ast;
@@ -17,10 +19,22 @@ mod kafka;
 
 fn main() {
     //let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let mut kafka_wrapper = KafkaWrapper::with_decoder(Decoder::new("192.168.99.100:8081".into()));
+    //let mut kafka_wrapper = KafkaWrapper::with_decoder();
 
-    kafka_wrapper.consume_via("appuser", |message| println!("Received message on appuser: {:#?}", message));
-    kafka_wrapper.consume_via("sometopic", |message| println!("Received message on sometopic: {:#?}", message));
+    let decoder_shared = Arc::new(Mutex::from(Decoder::new("localhost:8081".into())));
+
+    let decoder1 = decoder_shared.clone();
+    let first_thread = thread::spawn(move || {
+        kafka::consume_via(decoder1, "appuser", |message| println!("Received message on appuser: {:#?}", message));
+    });
+
+    let decoder2 = decoder_shared.clone();
+    let second_thread = thread::spawn(move || {
+        kafka::consume_via(decoder2, "sometopic", |message| println!("Received message on sometopic: {:#?}", message));
+    });
+
+    first_thread.join();
+    second_thread.join();
 
     /*for stream in listener.incoming() {
         let stream = stream.unwrap();

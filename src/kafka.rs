@@ -4,8 +4,10 @@ use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage, MessageSet, Mes
 use std::collections::HashMap;
 use std::thread;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use kafka::client::SecurityConfig;
+use std::ops::Add;
+use std::sync::{Arc, Mutex};
 
 struct TableRegistry {
     tables: HashMap<String, Table>,
@@ -32,34 +34,36 @@ pub(crate) struct KafkaWrapper {
     table_registry: TableRegistry,
 }
 
-impl KafkaWrapper {
+pub(crate) fn consume_via<F>(decoder: Arc<Mutex<Decoder>>, topic: &str, message_handler: F) where F: Fn(Value) -> () {
+    println!("Topic: {}", topic);
+    let mut consumer: Consumer = Consumer::from_hosts(vec!("localhost:9092".to_owned()))
+        .with_topic(String::from(topic))
+        .with_fallback_offset(FetchOffset::Earliest)
+        .with_offset_storage(GroupOffsetStorage::Kafka)
+        .create()
+        .unwrap();
 
-    pub(crate) fn with_decoder(decoder: Decoder) -> Self {
-        KafkaWrapper {
-            decoder,
-            table_registry: TableRegistry::new()
+    let mut latest_commit = Instant::now();
+
+    loop {
+        let messages: MessageSets = consumer.poll().unwrap();
+        messages.iter().flat_map(|message_set| {
+            let messages = message_set.messages();
+            consumer.consume_messageset(message_set);
+
+            messages
+        })
+            .map(|message| decoder.lock().unwrap().decode(Some(message.value)))
+            .map(|result| result.unwrap())
+            .for_each(&message_handler);
+
+        // Commit current offset to Kafka every 5 seconds
+        let current_instant = Instant::now();
+        if current_instant.gt(&latest_commit.add(Duration::from_secs(5))) {
+            consumer.commit_consumed();
+            latest_commit = current_instant;
         }
+
+        sleep(Duration::from_millis(500));
     }
-
-    pub(crate) fn consume_via<F>(&mut self, topic: &str, message_handler: F) where F: Fn(Value) -> () {
-        println!("Topic: {}", topic);
-        let mut consumer: Consumer = Consumer::from_hosts(vec!("192.168.99.100:9092".to_owned()))
-            .with_topic(String::from(topic))
-            .with_fallback_offset(FetchOffset::Earliest)
-            .with_offset_storage(GroupOffsetStorage::Kafka)
-            .create()
-            .unwrap();
-
-        loop {
-            println!("Polling messages.");
-            let messages: MessageSets = consumer.poll().unwrap();
-            messages.iter().flat_map(|message_set| message_set.messages())
-                .map(|message| self.decoder.decode(Some(message.value)))
-                .map(|result| result.unwrap())
-                .for_each(&message_handler);
-
-            sleep(Duration::from_millis(100));
-        }
-    }
-
 }

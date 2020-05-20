@@ -33,24 +33,3 @@ services:
       SCHEMA_REGISTRY_HOST_NAME: kiwlia-poc.test
     ports:
       - 8081:8081
-  ksqldb-server:
-    image: confluentinc/ksqldb-server:0.8.1
-    depends_on:
-      - kafka
-    hostname: ksqldb-server
-    container_name: ksqldb-server
-    ports:
-      - 8088:8088
-    environment:
-      KSQL_LISTENERS: http://0.0.0.0:8088
-      KSQL_BOOTSTRAP_SERVERS: kafka:29092
-      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
-      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
-      KSQL_KSQL_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-  ksqldb-cli:
-    image: confluentinc/ksqldb-cli:0.8.1
-    container_name: ksqldb-cli
-    depends_on:
-      - ksqldb-server
-    entrypoint: /bin/sh
-    tty: true
