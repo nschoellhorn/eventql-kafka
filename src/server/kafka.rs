@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use kafka::client::SecurityConfig;
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
+use avro_rs::Reader;
 
 struct TableRegistry {
     tables: HashMap<String, Table>,
@@ -34,7 +35,7 @@ pub(crate) struct KafkaWrapper {
     table_registry: TableRegistry,
 }
 
-pub(crate) fn consume_via<F>(decoder: Arc<Mutex<Decoder>>, topic: &str, message_handler: F) where F: Fn(Value) -> () {
+pub(crate) fn consume_via<F>(topic: &str, message_handler: F) where F: Fn(Vec<Value>) -> () {
     println!("Topic: {}", topic);
     let mut consumer: Consumer = Consumer::from_hosts(vec!("localhost:9092".to_owned()))
         .with_topic(String::from(topic))
@@ -57,8 +58,10 @@ pub(crate) fn consume_via<F>(decoder: Arc<Mutex<Decoder>>, topic: &str, message_
 
             messages
         })
-            .map(|message| decoder.lock().unwrap().decode(Some(message.value)))
-            .map(|result| result.unwrap())
+            .map(|message| Reader::new(message.value).unwrap())
+            .map(|reader| {
+                reader.map(|value_option| value_option.unwrap()).collect::<Vec<Value>>()
+            })
             .for_each(&message_handler);
 
         // Commit current offset to Kafka every 5 seconds if new messages were received since last commit

@@ -20,17 +20,12 @@ mod kafka;
 fn main() {
     //let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     //let mut kafka_wrapper = KafkaWrapper::with_decoder();
-
-    let decoder_shared = Arc::new(Mutex::from(Decoder::new("localhost:8081".into())));
-
-    let decoder1 = decoder_shared.clone();
-    let first_thread = thread::spawn(move || {
-        kafka::consume_via(decoder1, "appuser", |message| println!("Received message on appuser: {:#?}", message));
+    let first_thread = thread::spawn(|| {
+        kafka::consume_via("appuser", |message| println!("Received message on appuser: {:#?}", message));
     });
 
-    let decoder2 = decoder_shared.clone();
-    let second_thread = thread::spawn(move || {
-        kafka::consume_via(decoder2, "sometopic", |message| println!("Received message on sometopic: {:#?}", message));
+    let second_thread = thread::spawn(|| {
+        kafka::consume_via("sometopic", |message| println!("Received message on sometopic: {:#?}", message));
     });
 
     first_thread.join();
