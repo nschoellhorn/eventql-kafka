@@ -7,7 +7,7 @@ mod avro;
 use core::fmt;
 use kafka_client::error::Error as KafkaError;
 use std::fmt::{Display, Formatter};
-use std::io::Error as IoError;
+use std::io::{Error as IoError, stdin};
 use kafka_client::producer::{Producer, Record as KafkaRecord};
 use serde_json::Value;
 use avro_rs::{Writer, Schema};
@@ -44,7 +44,7 @@ fn main() -> Result<(), Error> {
 
     match args.value {
         Some(_) => produce_once(&mut producer, &mut args)?,
-        None => Result::Err(Error::EmptyError)?
+        None => produce_from_cli(&mut producer, &mut args)?,
     };
 
     Ok(())
@@ -68,6 +68,25 @@ fn produce_once(producer: &mut Producer, producer_args: &mut ProducerArgs) -> Re
         .map_err(|err| Error::KafkaError(err))
 }
 
-/*fn produce_from_cli(producer: &mut Producer, producer_args: &ProducerArgs) -> Result<(), Error> {
+fn produce_from_cli(producer: &mut Producer, producer_args: &mut ProducerArgs) -> Result<(), Error> {
+    let schema = avro::read_schema_from_file(&mut producer_args.schema_file)?;
 
-}*/
+    let mut str_buf = String::new();
+    loop {
+        stdin().read_line(&mut str_buf);
+
+        let mut writer = Writer::new(&schema, vec!());
+        let encoded = avro::json_value_to_avro_value(
+            serde_json::from_str::<Value>(&str_buf).expect("Invalid JSON provided as message value."),
+            &schema
+        );
+
+        str_buf.truncate(0);
+
+        writer.append(encoded).map_err(|err| Error::GeneralError(err))?;
+        writer.flush().map_err(|err| Error::GeneralError(err))?;
+
+        producer.send(&KafkaRecord::from_key_value(&producer_args.topic, producer_args.key.clone(), writer.into_inner()))
+            .map_err(|err| Error::KafkaError(err))?;
+    }
+}
