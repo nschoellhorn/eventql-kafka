@@ -50,19 +50,16 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-/*fn encode_value<V: ToAvro>(value: &str, schema: &Schema) -> V {
-    avro::json_value_to_avro_value(, schema)
-}*/
-
 fn produce_once(producer: &mut Producer, producer_args: &mut ProducerArgs) -> Result<(), Error> {
     let value = producer_args.value.clone()
         .expect("No value provided!");
     let schema = avro::read_schema_from_file(&mut producer_args.schema_file)?;
 
     let mut writer = Writer::new(&schema, vec!());
-    let encoded = serde_json::from_str::<Value>(&value).expect("Invalid JSON provided as message value.");
-
-    println!("Encoded Value: {:#?}", encoded.clone().avro());
+    let encoded = avro::json_value_to_avro_value(
+        serde_json::from_str::<Value>(&value).expect("Invalid JSON provided as message value."),
+        &schema
+    );
 
     writer.append(encoded).map_err(|err| Error::GeneralError(err))?;
     writer.flush().map_err(|err| Error::GeneralError(err))?;

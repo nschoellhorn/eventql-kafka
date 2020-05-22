@@ -16,8 +16,17 @@ pub(crate) fn read_schema_from_file(file: &mut File) -> Result<Schema, Error> {
         .map_err(|err| Error::GeneralError(err))
 }
 
-/*pub(crate) fn json_value_to_avro_value<V: ToAvro>(json_str: JsonValue, schema: &Schema) -> V {
-    match json_str {
+fn json_object_to_avro_value(map: Map<String, JsonValue>, schema: &Schema) -> AvroValue {
+    let mut record = Record::new(schema).unwrap();
+    for (key, value) in map {
+        record.put(&key, value.avro())
+    }
+
+    record.avro()
+}
+
+pub(crate) fn json_value_to_avro_value(json_value: JsonValue, schema: &Schema) -> AvroValue {
+    match json_value {
         JsonValue::Object(map) => json_object_to_avro_value(map, schema),
         JsonValue::Array(arr) => json_array_to_avro_value(arr, schema),
         JsonValue::String(str) => AvroValue::String(str),
@@ -28,18 +37,9 @@ pub(crate) fn read_schema_from_file(file: &mut File) -> Result<Schema, Error> {
     }
 }
 
-fn json_object_to_avro_value<V: ToAvro>(map: Map<String, JsonValue>, schema: &Schema) -> V {
-    let mut record = Record::new(schema).unwrap();
-    for (key, value) in map {
-        record.put(&key, json_value_to_avro_value(value, &schema))
-    }
-
-    record
-}
-
-fn json_number_to_avro_value<V: ToAvro>(num: Number) -> V {
+fn json_number_to_avro_value(num: Number) -> AvroValue {
     if num.is_f64() {
-        AvroValue::Double(num.as_f64().unwrap())
+        return AvroValue::Double(num.as_f64().unwrap())
     }
 
     AvroValue::Long(num.as_i64().unwrap())
@@ -51,5 +51,5 @@ fn json_array_to_avro_value(values: Vec<JsonValue>, schema: &Schema) -> AvroValu
             .map(|val| json_value_to_avro_value(val, schema))
             .collect()
     )
-}*/
+}
 
