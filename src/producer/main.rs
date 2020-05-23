@@ -10,18 +10,15 @@ use std::fmt::{Display, Formatter};
 use std::io::{Error as IoError, stdin};
 use kafka_client::producer::{Producer, Record as KafkaRecord};
 use serde_json::Value;
-use avro_rs::{Writer, Schema};
+use avro_rs::Writer;
 use cli::ProducerArgs;
 use failure::Error as GeneralError;
-use avro_rs::types::{Record as AvroRecord, Value as AvroValue, ToAvro};
 
 #[derive(Debug)]
 pub(crate) enum Error {
     IoError(IoError),
     KafkaError(KafkaError),
     GeneralError(GeneralError),
-    AvroSerializationError(avro_rs::SerError),
-    EmptyError,
 }
 
 impl Display for Error {
@@ -30,8 +27,6 @@ impl Display for Error {
             Error::IoError(err) => err.fmt(f),
             Error::KafkaError(err) => err.fmt(f),
             Error::GeneralError(err) => err.fmt(f),
-            Error::AvroSerializationError(err) => err.fmt(f),
-            Error::EmptyError => f.write_str("Empty Error"),
         }
     }
 }

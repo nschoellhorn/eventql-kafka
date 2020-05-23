@@ -1,3 +1,5 @@
+use crate::kafka::DataType;
+
 #[derive(Debug, PartialEq)]
 pub(crate) enum EventQL {
     CreateTableStatement {
@@ -12,20 +14,4 @@ pub(crate) struct ColumnDefinition {
     pub(crate) identifier: String,
     pub(crate) data_type: DataType,
     pub(crate) schema_property_identifier: String
-}
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum DataType {
-    Int,
-    String
-}
-
-impl DataType {
-    pub(crate) fn from_str(name: &str) -> DataType {
-        match name.to_lowercase().as_str() {
-            "int" => DataType::Int,
-            "string" => DataType::String,
-            _ => panic!("Unknown data type specified: {}", name),
-        }
-    }
 }

@@ -1,13 +1,10 @@
 use schema_registry_converter::Decoder;
-use avro_rs::types::{Record, Value};
-use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage, MessageSet, MessageSets};
+use avro_rs::types::Value;
+use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage, MessageSets};
 use std::collections::HashMap;
-use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use kafka::client::SecurityConfig;
 use std::ops::Add;
-use std::sync::{Arc, Mutex};
 use avro_rs::Reader;
 
 struct TableRegistry {
@@ -24,10 +21,37 @@ impl TableRegistry {
 
 }
 
+#[derive(Debug, PartialEq)]
+pub(crate) enum DataType {
+    Int,
+    String
+}
+
+impl DataType {
+    pub(crate) fn from_str(name: &str) -> DataType {
+        match name.to_lowercase().as_str() {
+            "int" => DataType::Int,
+            "string" => DataType::String,
+            _ => panic!("Unknown data type specified: {}", name),
+        }
+    }
+}
+
 struct Table {
     identifier: String,
     topic: String,
-    consumer: Consumer,
+    columns: Vec<Column>,
+}
+
+struct Column {
+    identifier: String,
+    column_type: DataType,
+    target_field: String,
+}
+
+struct Cell<V: CellValue> {
+    cell_type: DataType,
+    value: Box<V>
 }
 
 pub(crate) struct KafkaWrapper {
@@ -64,7 +88,7 @@ pub(crate) fn consume_via<F>(topic: &str, message_handler: F) where F: Fn(Vec<Va
             })
             .for_each(&message_handler);
 
-        // Commit current offset to Kafka every 5 seconds if new messages were received since last commit
+        // Commit current offset to Kafka every 30 seconds if new messages were received since last commit
         // This is better than committing after each consumed message in high-load situations
         let (updated_commit, updated_messages) = commit_offset_if_needed(&mut consumer, &latest_commit, consumed_messages);
         latest_commit = updated_commit;
@@ -77,7 +101,7 @@ pub(crate) fn consume_via<F>(topic: &str, message_handler: F) where F: Fn(Vec<Va
 
 fn commit_offset_if_needed(consumer: &mut Consumer, latest_commit: &Instant, consumed_messages: bool) -> (Instant, bool) {
     let current_instant = Instant::now();
-    if current_instant.gt(&latest_commit.add(Duration::from_secs(5)))
+    if current_instant.gt(&latest_commit.add(Duration::from_secs(30)))
         && consumed_messages {
         println!("Committing offset to Kafka...");
         consumer.commit_consumed();

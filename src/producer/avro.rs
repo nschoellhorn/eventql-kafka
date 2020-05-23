@@ -5,7 +5,6 @@ use crate::Error;
 use avro_rs::types::{Record, ToAvro};
 use serde_json::{Value as JsonValue, Number, Map};
 use avro_rs::types::Value as AvroValue;
-use crate::Error::AvroSerializationError;
 
 pub(crate) fn read_schema_from_file(file: &mut File) -> Result<Schema, Error> {
     let mut str_buf = String::new();
