@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-
 use crate::error::VirtualTableError;
 use failure::_core::fmt::{Display, Formatter};
 use std::fmt::Result as FmtResult;
 use std::rc::Rc;
 use uuid::Uuid;
+use linked_hash_map::LinkedHashMap;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub(crate) enum DataType {
@@ -32,8 +32,8 @@ pub(crate) struct Table {
     identifier: String,
     topic: String,
 
-    columns: HashMap<ColumnName, Rc<Column>>,
-    rows: HashMap<PrimaryKey, Row>,
+    columns: LinkedHashMap<ColumnName, Rc<Column>>,
+    rows: LinkedHashMap<PrimaryKey, Row>,
 
     message_field_map: HashMap<MessageFieldName, ColumnName>,
 }
@@ -62,7 +62,7 @@ impl Table {
                 .into_iter()
                 .map(|tuple| (tuple.0, tuple.2))
                 .collect(),
-            rows: HashMap::new(),
+            rows: LinkedHashMap::new(),
         }
     }
 
@@ -111,7 +111,7 @@ impl Display for Table {
         let header_row = self
             .columns
             .keys()
-            .map(|col_name| format!("{:^30}", col_name))
+            .map(|col_name| format!("{:^40}", col_name))
             .collect::<Vec<String>>()
             .join("|");
         f.write_str(&header_row)?;
@@ -143,7 +143,7 @@ pub(crate) struct Column {
 
 pub(crate) struct Row {
     pub(crate) primary_key: PrimaryKey,
-    pub(crate) columns: HashMap<Rc<Column>, Box<Cell<dyn EventqlMappedValue>>>,
+    pub(crate) columns: LinkedHashMap<Rc<Column>, Box<Cell<dyn EventqlMappedValue>>>,
 }
 
 impl Display for Row {
@@ -152,7 +152,7 @@ impl Display for Row {
             &self
                 .columns
                 .values()
-                .map(|val| format!("{:^30}", val.value))
+                .map(|val| format!("{:^40}", val.value))
                 .collect::<Vec<String>>()
                 .join("|"),
         )

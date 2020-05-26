@@ -203,6 +203,7 @@ dependencies = [
  "clap",
  "failure",
  "kafka",
+ "linked-hash-map",
  "pest",
  "pest_derive",
  "serde_json",
@@ -401,6 +402,12 @@ dependencies = [
  "rle-decode-fast",
  "take_mut",
 ]
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dd5a6d5999d9907cda8ed67bbd137d3af8085216c2ac62de5be860bd41f304a"
 
 [[package]]
 name = "log"

@@ -2,12 +2,12 @@ extern crate pest;
 #[macro_use]
 extern crate pest_derive;
 
-use std::collections::HashMap;
-
 use avro_rs::types::Value;
 
 use crate::virtual_table::{Cell, Column, DataType, EventqlMappedValue, PrimaryKey, Row, Table};
 use std::rc::Rc;
+use linked_hash_map::LinkedHashMap;
+use std::collections::HashMap;
 
 mod ast;
 mod error;
@@ -59,13 +59,18 @@ async fn main() {
 fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) {
     println!("Received message with key {} on appuser: {:#?}", key, value);
 
-    let mut row_map: HashMap<Rc<Column>, Box<Cell<dyn EventqlMappedValue>>> = HashMap::new();
+    let mut row_map: LinkedHashMap<Rc<Column>, Box<Cell<dyn EventqlMappedValue>>> = LinkedHashMap::new();
 
     let field_map = match value {
         Value::Map(map) => map,
         Value::Record(vec) => vec.into_iter().collect::<HashMap<String, Value>>(),
         _ => panic!("Unsupported value: {:?}", value),
     };
+
+    let id_col = table.find_column_by_name("id").unwrap();
+    let boxed_val: Box<dyn EventqlMappedValue> = Box::new(key); // TODO: Can we solve this without temp var?
+    let cell = Cell::for_column(&id_col, boxed_val);
+    row_map.insert(id_col, Box::new(cell));
 
     field_map.into_iter().for_each(|(field_name, value)| {
         let column_option = table.find_column_by_field(&field_name);
@@ -78,11 +83,6 @@ fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) 
 
         row_map.insert(col_rc, Box::new(cell));
     });
-
-    let id_col = table.find_column_by_name("id").unwrap();
-    let boxed_val: Box<dyn EventqlMappedValue> = Box::new(key); // TODO: Can we solve this without temp var?
-    let cell = Cell::for_column(&id_col, boxed_val);
-    row_map.insert(id_col, Box::new(cell));
 
     let found_row = table.find_row(&key);
     let is_update: bool;
