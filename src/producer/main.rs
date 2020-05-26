@@ -81,7 +81,9 @@ fn produce_from_cli(
 
     let mut str_buf = String::new();
     loop {
-        stdin().read_line(&mut str_buf);
+        stdin()
+            .read_line(&mut str_buf)
+            .map_err(|err| Error::IoError(err))?;
 
         let mut writer = Writer::new(&schema, vec![]);
         let encoded = avro::json_value_to_avro_value(

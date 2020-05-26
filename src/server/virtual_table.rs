@@ -18,6 +18,7 @@ impl DataType {
         match name.to_lowercase().as_str() {
             "int" => DataType::Int,
             "string" => DataType::String,
+            "uuid" => DataType::Uuid,
             _ => panic!("Unknown data type specified: {}", name),
         }
     }
@@ -83,7 +84,7 @@ impl Table {
         Result::Ok(())
     }
 
-    pub(crate) fn find_row(&self, primary_key: &PrimaryKey) -> Option<&Row> {
+    pub(crate) fn find_row(&mut self, primary_key: &PrimaryKey) -> Option<&Row> {
         self.rows.get(primary_key)
     }
 

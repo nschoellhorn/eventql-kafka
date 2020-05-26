@@ -1,16 +1,11 @@
 use std::collections::HashMap;
 use std::ops::Add;
-use std::sync::Arc;
-use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use avro_rs::types::Value;
 use avro_rs::Reader;
-use failure::_core::intrinsics::transmute;
 use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage, MessageSets};
-use schema_registry_converter::Decoder;
-use serde_json::Value as JsonValue;
 
 use crate::virtual_table::{PrimaryKey, Table};
 use uuid::Uuid;
@@ -75,10 +70,6 @@ where
         // Make the thread chill out between the polls (until we have a better solution - long polling?)
         sleep(Duration::from_millis(500));
     }
-}
-
-fn to_i64(bytes: &[u8]) -> PrimaryKey {
-    serde_json::from_slice::<PrimaryKey>(bytes).unwrap()
 }
 
 fn commit_offset_if_needed(

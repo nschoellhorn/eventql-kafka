@@ -3,15 +3,11 @@ extern crate pest;
 extern crate pest_derive;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::thread;
 
 use avro_rs::types::Value;
-use failure::_core::hash::Hash;
 
 use crate::virtual_table::{Cell, Column, DataType, EventqlMappedValue, PrimaryKey, Row, Table};
 use std::rc::Rc;
-use uuid::Uuid;
 
 mod ast;
 mod error;
@@ -23,7 +19,7 @@ mod virtual_table;
 async fn main() {
     //let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     //let mut kafka_wrapper = KafkaWrapper::with_decoder();
-    let first_thread = tokio::spawn(async move {
+    tokio::spawn(async move {
         let mut table = Table::create(
             "appuser_table".to_string(),
             "appuser".to_string(),
@@ -84,20 +80,37 @@ fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) 
     });
 
     let id_col = table.find_column_by_name("id").unwrap();
-    let boxed_val: Box<dyn EventqlMappedValue> = Box::new(key); // Can we solve this without temp var?
+    let boxed_val: Box<dyn EventqlMappedValue> = Box::new(key); // TODO: Can we solve this without temp var?
     let cell = Cell::for_column(&id_col, boxed_val);
     row_map.insert(id_col, Box::new(cell));
 
-    match table.find_row(&key) {
-        Some(row) => table.update_row(Row {
-            columns: row_map,
-            ..*row
-        }), // TODO: Update row
-        None => table.add_row(Row {
-            primary_key: key,
-            columns: row_map,
-        }),
+    let found_row = table.find_row(&key);
+    let is_update: bool;
+
+    let updated_row = match found_row {
+        Some(row) => {
+            is_update = true;
+
+            Row {
+                columns: row_map,
+                ..*row
+            }
+        }
+        None => {
+            is_update = false;
+
+            Row {
+                primary_key: key,
+                columns: row_map,
+            }
+        }
     };
+
+    if is_update {
+        table.update_row(updated_row);
+    } else {
+        table.add_row(updated_row);
+    }
 
     println!("Current Table:\n{}", table);
 }

@@ -17,7 +17,6 @@ path = "src/producer/main.rs"
 [dependencies]
 pest = "2.0"
 pest_derive = "2.0"
-schema_registry_converter = "1.1.0"
 avro-rs = "0.9.1"
 kafka = "0.8.0"
 clap = "2.33.1"
