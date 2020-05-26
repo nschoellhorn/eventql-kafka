@@ -1,18 +1,18 @@
 extern crate kafka as kafka_client;
 
+mod avro;
 mod cli;
 mod kafka;
-mod avro;
 
-use core::fmt;
-use kafka_client::error::Error as KafkaError;
-use std::fmt::{Display, Formatter};
-use std::io::{Error as IoError, stdin};
-use kafka_client::producer::{Producer, Record as KafkaRecord};
-use serde_json::Value;
 use avro_rs::Writer;
 use cli::ProducerArgs;
+use core::fmt;
 use failure::Error as GeneralError;
+use kafka_client::error::Error as KafkaError;
+use kafka_client::producer::{Producer, Record as KafkaRecord};
+use serde_json::Value;
+use std::fmt::{Display, Formatter};
+use std::io::{stdin, Error as IoError};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -47,49 +47,66 @@ fn main() -> Result<(), Error> {
 }
 
 fn produce_once(producer: &mut Producer, producer_args: &mut ProducerArgs) -> Result<(), Error> {
-    let value = producer_args.value.clone()
-        .expect("No value provided!");
+    let value = producer_args.value.clone().expect("No value provided!");
     let schema = avro::read_schema_from_file(&mut producer_args.schema_file)?;
 
-    let mut writer = Writer::new(&schema, vec!());
+    let mut writer = Writer::new(&schema, vec![]);
     let encoded = avro::json_value_to_avro_value(
         serde_json::from_str::<Value>(&value).expect("Invalid JSON provided as message value."),
-        &schema
+        &schema,
     );
 
-    writer.append(encoded).map_err(|err| Error::GeneralError(err))?;
+    writer
+        .append(encoded)
+        .map_err(|err| Error::GeneralError(err))?;
     writer.flush().map_err(|err| Error::GeneralError(err))?;
 
     let uuid = Uuid::parse_str(&producer_args.key).expect("Invalid UUID specified as key.");
     let uuid_bytes = uuid.as_bytes();
 
-    producer.send(&KafkaRecord::from_key_value(&producer_args.topic, &uuid_bytes[0..], writer.into_inner()))
+    producer
+        .send(&KafkaRecord::from_key_value(
+            &producer_args.topic,
+            &uuid_bytes[0..],
+            writer.into_inner(),
+        ))
         .map_err(|err| Error::KafkaError(err))
 }
 
-fn produce_from_cli(producer: &mut Producer, producer_args: &mut ProducerArgs) -> Result<(), Error> {
+fn produce_from_cli(
+    producer: &mut Producer,
+    producer_args: &mut ProducerArgs,
+) -> Result<(), Error> {
     let schema = avro::read_schema_from_file(&mut producer_args.schema_file)?;
 
     let mut str_buf = String::new();
     loop {
         stdin().read_line(&mut str_buf);
 
-        let mut writer = Writer::new(&schema, vec!());
+        let mut writer = Writer::new(&schema, vec![]);
         let encoded = avro::json_value_to_avro_value(
-            serde_json::from_str::<Value>(&str_buf).expect("Invalid JSON provided as message value."),
-            &schema
+            serde_json::from_str::<Value>(&str_buf)
+                .expect("Invalid JSON provided as message value."),
+            &schema,
         );
 
         str_buf.truncate(0);
 
-        writer.append(encoded).map_err(|err| Error::GeneralError(err))?;
+        writer
+            .append(encoded)
+            .map_err(|err| Error::GeneralError(err))?;
         writer.flush().map_err(|err| Error::GeneralError(err))?;
 
         // Big fucking hack since the Kafka lib only accepts stuff that is implemented with "AsBytes" trait.
         let uuid = Uuid::parse_str(&producer_args.key).expect("Invalid UUID specified as key.");
         let uuid_bytes = uuid.as_bytes();
 
-        producer.send(&KafkaRecord::from_key_value(&producer_args.topic, &uuid_bytes[0..], writer.into_inner()))
+        producer
+            .send(&KafkaRecord::from_key_value(
+                &producer_args.topic,
+                &uuid_bytes[0..],
+                writer.into_inner(),
+            ))
             .map_err(|err| Error::KafkaError(err))?;
     }
 }

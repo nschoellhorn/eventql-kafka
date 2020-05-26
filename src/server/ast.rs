@@ -13,5 +13,5 @@ pub(crate) enum EventQL {
 pub(crate) struct ColumnDefinition {
     pub(crate) identifier: String,
     pub(crate) data_type: DataType,
-    pub(crate) schema_property_identifier: String
+    pub(crate) schema_property_identifier: String,
 }

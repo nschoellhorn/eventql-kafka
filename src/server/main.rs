@@ -13,11 +13,11 @@ use crate::virtual_table::{Cell, Column, DataType, EventqlMappedValue, PrimaryKe
 use std::rc::Rc;
 use uuid::Uuid;
 
-mod parser;
 mod ast;
-mod kafka;
-mod virtual_table;
 mod error;
+mod kafka;
+mod parser;
+mod virtual_table;
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +27,7 @@ async fn main() {
         let mut table = Table::create(
             "appuser_table".to_string(),
             "appuser".to_string(),
-            vec!(
+            vec![
                 Column {
                     identifier: "id".to_string(),
                     column_type: DataType::Int,
@@ -42,13 +42,14 @@ async fn main() {
                     identifier: "last_name".to_string(),
                     column_type: DataType::String,
                     target_field: "last_name".to_string(),
-                }
-            ),
+                },
+            ],
         );
-        kafka::consume_via("appuser",  move |key, value| {
+        kafka::consume_via("appuser", move |key, value| {
             aggregate_on_virtual_table(&mut table, key, value);
         });
-    }).await;
+    })
+    .await;
 
     //first_thread.join();
 
@@ -70,35 +71,28 @@ fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) 
         _ => panic!("Unsupported value: {:?}", value),
     };
 
-    field_map.into_iter()
-        .for_each(|(field_name, value)| {
-            let column_option = table.find_column_by_field(&field_name);
-            if let None = column_option {
-                panic!("Invalid field name: {}", field_name);
-            }
+    field_map.into_iter().for_each(|(field_name, value)| {
+        let column_option = table.find_column_by_field(&field_name);
+        if let None = column_option {
+            panic!("Invalid field name: {}", field_name);
+        }
 
-            let col_rc = Rc::clone(&column_option.unwrap());
-            let cell = Cell::for_column(&col_rc, retrieve_value(value));
+        let col_rc = Rc::clone(&column_option.unwrap());
+        let cell = Cell::for_column(&col_rc, retrieve_value(value));
 
-            row_map.insert(
-                col_rc,
-                Box::new(cell)
-            );
-        });
+        row_map.insert(col_rc, Box::new(cell));
+    });
 
     let id_col = table.find_column_by_name("id").unwrap();
     let boxed_val: Box<dyn EventqlMappedValue> = Box::new(key); // Can we solve this without temp var?
     let cell = Cell::for_column(&id_col, boxed_val);
-    row_map.insert(
-        id_col,
-        Box::new(cell)
-    );
+    row_map.insert(id_col, Box::new(cell));
 
     match table.find_row(&key) {
         Some(row) => table.update_row(Row {
             columns: row_map,
             ..*row
-        }),// TODO: Update row
+        }), // TODO: Update row
         None => table.add_row(Row {
             primary_key: key,
             columns: row_map,

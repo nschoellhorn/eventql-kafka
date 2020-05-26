@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::error::VirtualTableError;
-use std::rc::Rc;
 use failure::_core::fmt::{Display, Formatter};
 use std::fmt::Result as FmtResult;
+use std::rc::Rc;
 use uuid::Uuid;
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
@@ -39,17 +39,26 @@ pub(crate) struct Table {
 
 impl Table {
     pub(crate) fn create(identifier: String, topic: String, columns: Vec<Column>) -> Self {
-        let column_tuples = columns.into_iter()
-            .map(|col| (col.identifier.clone(), col.target_field.clone(), Rc::new(col)))
+        let column_tuples = columns
+            .into_iter()
+            .map(|col| {
+                (
+                    col.identifier.clone(),
+                    col.target_field.clone(),
+                    Rc::new(col),
+                )
+            })
             .collect::<Vec<(ColumnName, MessageFieldName, Rc<Column>)>>();
 
         Table {
             identifier,
             topic,
-            message_field_map: column_tuples.iter()
+            message_field_map: column_tuples
+                .iter()
                 .map(|tuple| (tuple.1.clone(), tuple.0.clone()))
                 .collect(),
-            columns: column_tuples.into_iter()
+            columns: column_tuples
+                .into_iter()
                 .map(|tuple| (tuple.0, tuple.2))
                 .collect(),
             rows: HashMap::new(),
@@ -98,7 +107,9 @@ impl Table {
 impl Display for Table {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         // Display the table header (column name + separator line)
-        let header_row = self.columns.keys()
+        let header_row = self
+            .columns
+            .keys()
             .map(|col_name| format!("{:^30}", col_name))
             .collect::<Vec<String>>()
             .join("|");
@@ -111,7 +122,8 @@ impl Display for Table {
         f.write_str("\n")?;
 
         // Display the body, which is each row
-        self.rows.values()
+        self.rows
+            .values()
             .map(|row| {
                 row.fmt(f)?;
 
@@ -135,15 +147,24 @@ pub(crate) struct Row {
 
 impl Display for Row {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_str(&self.columns.values()
-            .map(|val| format!("{:^30}", val.value))
-            .collect::<Vec<String>>()
-            .join("|"))
+        f.write_str(
+            &self
+                .columns
+                .values()
+                .map(|val| format!("{:^30}", val.value))
+                .collect::<Vec<String>>()
+                .join("|"),
+        )
     }
 }
 
-pub(crate) trait EventqlMappedValue where Self: Display {
-    fn eventql_type() -> DataType where Self: Sized;
+pub(crate) trait EventqlMappedValue
+where
+    Self: Display,
+{
+    fn eventql_type() -> DataType
+    where
+        Self: Sized;
 }
 
 impl EventqlMappedValue for i32 {
@@ -176,12 +197,18 @@ impl EventqlMappedValue for Uuid {
     }
 }
 
-pub(crate) struct Cell<V> where V: EventqlMappedValue + ?Sized {
+pub(crate) struct Cell<V>
+where
+    V: EventqlMappedValue + ?Sized,
+{
     cell_type: DataType,
     value: Box<V>,
 }
 
-impl<V> Cell<V> where V: EventqlMappedValue + ?Sized {
+impl<V> Cell<V>
+where
+    V: EventqlMappedValue + ?Sized,
+{
     pub(crate) fn for_column(column: &Column, value: Box<V>) -> Self {
         Cell {
             cell_type: column.column_type.clone(),
