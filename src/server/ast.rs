@@ -1,4 +1,4 @@
-use crate::kafka::DataType;
+use crate::virtual_table::DataType;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum EventQL {

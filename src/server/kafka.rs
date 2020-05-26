@@ -1,65 +1,33 @@
-use schema_registry_converter::Decoder;
-use avro_rs::types::Value;
-use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage, MessageSets};
 use std::collections::HashMap;
+use std::ops::Add;
+use std::sync::Arc;
+use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::ops::Add;
+
 use avro_rs::Reader;
+use avro_rs::types::Value;
+use failure::_core::intrinsics::transmute;
+use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage, MessageSets};
+use schema_registry_converter::Decoder;
+use serde_json::Value as JsonValue;
+
+use crate::virtual_table::{PrimaryKey, Table};
+use uuid::Uuid;
 
 struct TableRegistry {
     tables: HashMap<String, Table>,
 }
 
 impl TableRegistry {
-
     pub(crate) fn new() -> Self {
         TableRegistry {
             tables: HashMap::new()
         }
     }
-
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum DataType {
-    Int,
-    String
-}
-
-impl DataType {
-    pub(crate) fn from_str(name: &str) -> DataType {
-        match name.to_lowercase().as_str() {
-            "int" => DataType::Int,
-            "string" => DataType::String,
-            _ => panic!("Unknown data type specified: {}", name),
-        }
-    }
-}
-
-struct Table {
-    identifier: String,
-    topic: String,
-    columns: Vec<Column>,
-}
-
-struct Column {
-    identifier: String,
-    column_type: DataType,
-    target_field: String,
-}
-
-struct Cell<V: CellValue> {
-    cell_type: DataType,
-    value: Box<V>
-}
-
-pub(crate) struct KafkaWrapper {
-    decoder: Decoder,
-    table_registry: TableRegistry,
-}
-
-pub(crate) fn consume_via<F>(topic: &str, message_handler: F) where F: Fn(Vec<Value>) -> () {
+pub(crate) fn consume_via<F>(topic: &str, mut message_handler: F) where F: FnMut(PrimaryKey, Value) -> () {
     println!("Topic: {}", topic);
     let mut consumer: Consumer = Consumer::from_hosts(vec!("localhost:9092".to_owned()))
         .with_topic(String::from(topic))
@@ -82,11 +50,12 @@ pub(crate) fn consume_via<F>(topic: &str, message_handler: F) where F: Fn(Vec<Va
 
             messages
         })
-            .map(|message| Reader::new(message.value).unwrap())
-            .map(|reader| {
-                reader.map(|value_option| value_option.unwrap()).collect::<Vec<Value>>()
+            .map(|message| (Uuid::from_slice(message.key).unwrap(), Reader::new(message.value).unwrap()))
+            .flat_map(|(key, value_list)| {
+                value_list.map(move |value| (key, value.unwrap()))
             })
-            .for_each(&message_handler);
+            // TODO: Improve error handling here.
+            .for_each(|tuple| message_handler(tuple.0, tuple.1));
 
         // Commit current offset to Kafka every 30 seconds if new messages were received since last commit
         // This is better than committing after each consumed message in high-load situations
@@ -97,6 +66,10 @@ pub(crate) fn consume_via<F>(topic: &str, message_handler: F) where F: Fn(Vec<Va
         // Make the thread chill out between the polls (until we have a better solution - long polling?)
         sleep(Duration::from_millis(500));
     }
+}
+
+fn to_i64(bytes: &[u8]) -> PrimaryKey {
+    serde_json::from_slice::<PrimaryKey>(bytes).unwrap()
 }
 
 fn commit_offset_if_needed(consumer: &mut Consumer, latest_commit: &Instant, consumed_messages: bool) -> (Instant, bool) {

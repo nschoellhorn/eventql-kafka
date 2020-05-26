@@ -13,6 +13,7 @@ use serde_json::Value;
 use avro_rs::Writer;
 use cli::ProducerArgs;
 use failure::Error as GeneralError;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub(crate) enum Error {
@@ -59,7 +60,10 @@ fn produce_once(producer: &mut Producer, producer_args: &mut ProducerArgs) -> Re
     writer.append(encoded).map_err(|err| Error::GeneralError(err))?;
     writer.flush().map_err(|err| Error::GeneralError(err))?;
 
-    producer.send(&KafkaRecord::from_value(&producer_args.topic, writer.into_inner()))
+    let uuid = Uuid::parse_str(&producer_args.key).expect("Invalid UUID specified as key.");
+    let uuid_bytes = uuid.as_bytes();
+
+    producer.send(&KafkaRecord::from_key_value(&producer_args.topic, &uuid_bytes[0..], writer.into_inner()))
         .map_err(|err| Error::KafkaError(err))
 }
 
@@ -81,7 +85,11 @@ fn produce_from_cli(producer: &mut Producer, producer_args: &mut ProducerArgs) -
         writer.append(encoded).map_err(|err| Error::GeneralError(err))?;
         writer.flush().map_err(|err| Error::GeneralError(err))?;
 
-        producer.send(&KafkaRecord::from_key_value(&producer_args.topic, producer_args.key.clone(), writer.into_inner()))
+        // Big fucking hack since the Kafka lib only accepts stuff that is implemented with "AsBytes" trait.
+        let uuid = Uuid::parse_str(&producer_args.key).expect("Invalid UUID specified as key.");
+        let uuid_bytes = uuid.as_bytes();
+
+        producer.send(&KafkaRecord::from_key_value(&producer_args.topic, &uuid_bytes[0..], writer.into_inner()))
             .map_err(|err| Error::KafkaError(err))?;
     }
 }

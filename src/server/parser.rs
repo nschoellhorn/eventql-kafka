@@ -1,7 +1,7 @@
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use crate::ast::{EventQL, ColumnDefinition};
-use crate::kafka::DataType;
+use crate::virtual_table::DataType;
 
 #[derive(Parser)]
 #[grammar = "../resources/grammar.pest"]
