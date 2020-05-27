@@ -11,6 +11,7 @@ pub(crate) enum DataType {
     Int,
     String,
     Uuid,
+    Null,
 }
 
 impl DataType {
@@ -103,6 +104,10 @@ impl Table {
 
         None
     }
+
+    pub(crate) fn get_columns(&self) -> Vec<Rc<Column>> {
+        self.columns.values().map(|rc| Rc::clone(rc)).collect()
+    }
 }
 
 impl Display for Table {
@@ -139,11 +144,40 @@ pub(crate) struct Column {
     pub(crate) identifier: String,
     pub(crate) column_type: DataType,
     pub(crate) target_field: String,
+    pub(crate) is_nullable: bool,
 }
 
 pub(crate) struct Row {
     pub(crate) primary_key: PrimaryKey,
     pub(crate) columns: LinkedHashMap<Rc<Column>, Box<Cell<dyn EventqlMappedValue>>>,
+}
+
+impl Row {
+
+    pub(crate) fn empty(key: PrimaryKey) -> Self {
+        Row {
+            primary_key: key,
+            columns: LinkedHashMap::new(),
+        }
+    }
+
+    pub(crate) fn create_cell(&mut self, column: Rc<Column>, value: Box<dyn EventqlMappedValue>) {
+        let cell = Box::new(Cell::for_column(&column, value));
+        self.columns.insert(column, cell);
+    }
+
+    pub(crate) fn get_columns(&self) -> Vec<Rc<Column>> {
+        self.columns.keys().map(|rc| Rc::clone(rc)).collect()
+    }
+
+    pub(crate) fn get_cell(&self, column: &Column) -> Option<&Box<Cell<dyn EventqlMappedValue>>> {
+        self.columns.get(column)
+    }
+
+    pub(crate) fn fetch_cell(&self, column: &Column) -> Option<Box<Cell<dyn EventqlMappedValue>>> {
+        self.get_cell(column).map(|cell_ref| *cell_ref)
+    }
+
 }
 
 impl Display for Row {
@@ -198,6 +232,20 @@ impl EventqlMappedValue for Uuid {
     }
 }
 
+pub(crate) struct Null;
+
+impl EventqlMappedValue for Null {
+    fn eventql_type() -> DataType {
+        DataType::Null
+    }
+}
+
+impl Display for Null {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str("*NULL*")
+    }
+}
+
 pub(crate) struct Cell<V>
 where
     V: EventqlMappedValue + ?Sized,
@@ -219,5 +267,10 @@ where
 
     pub(crate) fn value(&self) -> &V {
         self.value.as_ref()
+    }
+
+    /// Consumes the cell and returns the boxed value
+    pub(crate) fn fetch(self) -> Box<V> {
+        self.value
     }
 }

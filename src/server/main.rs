@@ -4,10 +4,11 @@ extern crate pest_derive;
 
 use avro_rs::types::Value;
 
-use crate::virtual_table::{Cell, Column, DataType, EventqlMappedValue, PrimaryKey, Row, Table};
+use crate::virtual_table::{Cell, Column, DataType, EventqlMappedValue, PrimaryKey, Row, Table, Null};
 use std::rc::Rc;
 use linked_hash_map::LinkedHashMap;
 use std::collections::HashMap;
+use crate::error::VirtualTableError;
 
 mod ast;
 mod error;
@@ -28,16 +29,19 @@ async fn main() {
                     identifier: "id".to_string(),
                     column_type: DataType::Int,
                     target_field: "KEY".to_string(),
+                    is_nullable: false,
                 },
                 Column {
                     identifier: "firstname".to_string(),
                     column_type: DataType::String,
                     target_field: "first_name".to_string(),
+                    is_nullable: false,
                 },
                 Column {
                     identifier: "last_name".to_string(),
                     column_type: DataType::String,
                     target_field: "last_name".to_string(),
+                    is_nullable: false,
                 },
             ],
         );
@@ -56,7 +60,7 @@ async fn main() {
     }*/
 }
 
-fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) {
+fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) -> Result<(), VirtualTableError> {
     println!("Received message with key {} on appuser: {:#?}", key, value);
 
     let mut row_map: LinkedHashMap<Rc<Column>, Box<Cell<dyn EventqlMappedValue>>> = LinkedHashMap::new();
@@ -109,10 +113,46 @@ fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) 
     if is_update {
         table.update_row(updated_row);
     } else {
-        table.add_row(updated_row);
+        // We need to make sure that all required fields are set, so we don't end up with some random amount of columns
+        let validated_row = validate_row(&table, updated_row)?;
+        table.add_row(validated_row);
     }
 
     println!("Current Table:\n{}", table);
+
+    Result::Ok(())
+}
+
+/// Makes sure that the row contains cells for all required columns and fills non-present nullable columns with empty cells if needed.
+fn validate_row(table: &Table, row: Row) -> Result<Row, VirtualTableError> {
+    let mut validated_row = create_nulled_row(table, row.primary_key.clone());
+
+    // Find all required columns
+    table.get_columns().into_iter()
+        .filter(|col| !col.is_nullable)
+        .map(|required_col| {
+            // If the new row does not the required field, we produce an error result for this column
+            let new_cell = row.fetch_cell(&required_col);
+            if let None = new_cell {
+                return Result::Err(VirtualTableError::ValueNull(required_col));
+            }
+
+            // If we have a value, we put it into the corresponding cell
+            validated_row.create_cell(required_col, new_cell.unwrap().fetch());
+
+            Result::Ok(validated_row)
+        }).last().unwrap_or(Result::Ok(Row::empty(row.primary_key.clone()))) // TODO: Set fields that are not required too if present in message.
+}
+
+fn create_nulled_row(table: &Table, key: PrimaryKey) -> Row {
+    let mut empty_row = Row::empty(key);
+
+    // Create a null cell for each column in that table
+    table.get_columns().into_iter().for_each(|column| {
+        empty_row.create_cell(column, Box::new(Null));
+    });
+
+    empty_row
 }
 
 fn retrieve_value(avro_value: Value) -> Box<dyn EventqlMappedValue> {
