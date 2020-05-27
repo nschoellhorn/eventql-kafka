@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "FirstNameChanged",
+  "fields": [
+    {
+      "name": "first_name",
+      "type": "string"
+    }
+  ]
+}
