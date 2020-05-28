@@ -9,6 +9,7 @@ use std::rc::Rc;
 use linked_hash_map::LinkedHashMap;
 use std::collections::HashMap;
 use crate::error::VirtualTableError;
+use failure::_core::cell::RefCell;
 
 mod ast;
 mod error;
@@ -46,7 +47,10 @@ async fn main() {
             ],
         );
         kafka::consume_via("appuser", move |key, value| {
-            aggregate_on_virtual_table(&mut table, key, value);
+            let result = aggregate_on_virtual_table(&mut table, key, value);
+            if let Err(err) = result {
+                eprintln!("Unable to apply aggregate update:\n{}", err);
+            }
         });
     })
     .await;
@@ -124,24 +128,27 @@ fn aggregate_on_virtual_table(table: &mut Table, key: PrimaryKey, value: Value) 
 }
 
 /// Makes sure that the row contains cells for all required columns and fills non-present nullable columns with empty cells if needed.
-fn validate_row(table: &Table, row: Row) -> Result<Row, VirtualTableError> {
-    let mut validated_row = create_nulled_row(table, row.primary_key.clone());
+fn validate_row(table: &Table, mut row: Row) -> Result<Row, VirtualTableError> {
+    let mut validated_row = RefCell::new(create_nulled_row(table, row.primary_key.clone()));
 
     // Find all required columns
     table.get_columns().into_iter()
         .filter(|col| !col.is_nullable)
         .map(|required_col| {
             // If the new row does not the required field, we produce an error result for this column
+            let mut mutable_row = validated_row.borrow_mut();
             let new_cell = row.fetch_cell(&required_col);
             if let None = new_cell {
                 return Result::Err(VirtualTableError::ValueNull(required_col));
             }
 
             // If we have a value, we put it into the corresponding cell
-            validated_row.create_cell(required_col, new_cell.unwrap().fetch());
+            mutable_row.create_cell(required_col, new_cell.unwrap().fetch());
 
-            Result::Ok(validated_row)
-        }).last().unwrap_or(Result::Ok(Row::empty(row.primary_key.clone()))) // TODO: Set fields that are not required too if present in message.
+            Result::Ok(())
+        }).last().unwrap_or(Result::Ok(())).map(|_| validated_row.into_inner())
+
+    // TODO: Set fields that are not required too if present in message.
 }
 
 fn create_nulled_row(table: &Table, key: PrimaryKey) -> Row {

@@ -174,8 +174,8 @@ impl Row {
         self.columns.get(column)
     }
 
-    pub(crate) fn fetch_cell(&self, column: &Column) -> Option<Box<Cell<dyn EventqlMappedValue>>> {
-        self.get_cell(column).map(|cell_ref| *cell_ref)
+    pub(crate) fn fetch_cell(&mut self, column: &Column) -> Option<Box<Cell<dyn EventqlMappedValue>>> {
+        self.columns.remove(column)
     }
 
 }
